@@ -17,14 +17,15 @@ import ocean.task.Scheduler;
 import ocean.task.Task;
 
 import ocean.io.select.client.TimerEvent;
+import swarm.neo.authentication.ClientCredentials;
 
 
 abstract class DmqTest
 {
     import dmqproto.client.DmqClient;
 
-    import swarm.core.neo.authentication.HmacDef: Key;
-    import swarm.core.neo.IPAddress;
+    import swarm.neo.authentication.HmacDef: Key;
+    import swarm.neo.IPAddress;
 
     protected DmqClient dmq;
 
@@ -33,9 +34,10 @@ abstract class DmqTest
         SchedulerConfiguration config;
         initScheduler(config);
 
-        auto auth_name = "neotest";
-        ubyte[] auth_key = Key.init.content;
-        this.dmq = new DmqClient(theScheduler.epoll, auth_name, auth_key,
+        Credentials credentials;
+        credentials.setFromFile("credentials");
+
+        this.dmq = new DmqClient(theScheduler.epoll, credentials.name, credentials.key.content,
             &this.connNotifier);
         this.dmq.neo.addNode("136.243.102.199", 41011);
         this.dmq.neo.addNode("136.243.102.199", 41013);
@@ -46,20 +48,22 @@ abstract class DmqTest
         theScheduler.eventLoop();
     }
 
-    private void connNotifier ( IPAddress node_address, Exception e )
-    {
-        if ( e !is null )
+        private void connNotifier ( DmqClient.Neo.ConnNotification info )
         {
-            Stderr.formatln("Connection error: {}", getMsg(e));
-            return;
-        }
+            with (info.Active) switch (info.active)
+            {
+            case connected:
+                this.go();
+                break;
+            case error_while_connecting:
+                Stderr.formatln("Error!");
+                break;
+            default:
+                assert(false);
+            }
 
-        if ( this.dmq.neo.all_nodes_connected )
-        {
-            Stdout.formatln("Connected. Let's Go...................................................................");
-            this.go();
         }
-    }
+        import ocean.io.Stdout;
 
     abstract protected void go ( );
 
@@ -181,29 +185,12 @@ abstract class DmqTest
     {
         with ( info.Active ) switch ( info.active )
         {
-            case started:
-                Stdout.formatln("Consume {} started on all nodes.",
-                    args.channel);
-                break;
-
-            case received:
-                Stdout.formatln("Consumed: {}", cast(cstring)info.received.value);
-                break;
-
             case stopped:
                 Stdout.formatln("Consume {} stopped on all nodes.",
                     args.channel);
                 break;
 
-            case suspended:
-                Stdout.formatln("Consume {} suspended on all nodes.",
-                    args.channel);
-                break;
 
-            case resumed:
-                Stdout.formatln("Consume {} resumed on all nodes.",
-                    args.channel);
-                break;
 
             case channel_removed:
                 Stdout.formatln("Consume {} channel removed.",
@@ -378,7 +365,7 @@ class PushConsumeTest : DmqTest
         this.timer = new TimerEvent(&this.timer_dg);
     }
 
-    import swarm.core.neo.protocol.Message: RequestId;
+    import swarm.neo.protocol.Message: RequestId;
     RequestId consume_id;
 
     // Sets up:
