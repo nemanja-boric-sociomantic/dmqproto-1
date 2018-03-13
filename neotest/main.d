@@ -37,7 +37,8 @@ abstract class DmqTest
         ubyte[] auth_key = Key.init.content;
         this.dmq = new DmqClient(theScheduler.epoll, auth_name, auth_key,
             &this.connNotifier);
-        this.dmq.neo.addNode("78.46.85.196", 10_001);
+        this.dmq.neo.addNode("136.243.102.199", 41011);
+        this.dmq.neo.addNode("136.243.102.199", 41013);
     }
 
     final public void start ( )
